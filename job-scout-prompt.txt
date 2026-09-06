@@ -3,6 +3,8 @@ You are running a scheduled job-scouting task. Do NOT log into or scrape LinkedI
 GOAL
 Find job postings from the last 24 hours, located in Canada, matching my target roles, and produce a scored shortlist.
 
+Wait a few seconds between each web_search call to avoid triggering rate limiting or bot-detection from the search provider.
+
 STEP 1 — SEARCH
 Run web_search for each of these queries (one per target role variant):
   1. site:linkedin.com/jobs/view "Solutions Engineer" Canada

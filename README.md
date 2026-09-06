@@ -31,9 +31,11 @@ Building this surfaced a real chain of infrastructure issues, in the order I hit
 
 7. **Discovered a real ceiling: `web_fetch` can't read LinkedIn job descriptions.** `web_fetch` is a lightweight HTTP fetch with no JS rendering. LinkedIn job description bodies are client-side rendered, so `web_fetch` only reliably returns page shell/metadata, not the actual JD text. This constrains scoring to signals available without full-page rendering (title, company, location, and whatever text is present in the fetched shell) rather than true full-JD keyword matching against the rubric's role-keyword lists.
 
+8. **DuckDuckGo's free search endpoint has bot-detection that triggers mid-session.** Running the four target-role queries back to back was enough to trip DuckDuckGo's bot-detection after the first query succeeded — server logs showed `"DuckDuckGo returned a bot-detection challenge"` on the subsequent calls. This is a known constraint of a free/scraped search tier, not something request pacing alone fully resolves (the prompt now includes an explicit "wait a few seconds between calls" instruction, which helps but doesn't eliminate it). I also tried switching to Firecrawl's free tier (`firecrawl-free`) as an alternate provider, but hit a separate, unresolved configuration bug (`WEB_SEARCH_PROVIDER_INVALID_AUTODETECT`) despite following its documented setup — reverted to DuckDuckGo rather than keep debugging an apparent framework issue.
+
 ## Results
 
-**What worked:** the search and link-discovery stage is solid. `web_search` via DuckDuckGo reliably surfaces real, current LinkedIn job posting URLs for `site:linkedin.com/jobs/view` queries. Example, from a recovered session transcript for the query `site:linkedin.com/jobs/view "Solutions Engineer" Canada`:
+**What worked:** the search and link-discovery stage is solid when it isn't rate-limited. `web_search` via DuckDuckGo reliably surfaces real, current LinkedIn job posting URLs for `site:linkedin.com/jobs/view` queries. Example, from a live run of the query `site:linkedin.com/jobs/view "Solutions Engineer" Canada`, which returned 5 real LinkedIn job URLs in under 1 second:
 
 ```
 1. https://ca.linkedin.com/jobs/view/solutions-engineer-at-peregrine-4448060294
@@ -48,7 +50,11 @@ Building this surfaced a real chain of infrastructure issues, in the order I hit
    ECAM hiring Solutions Engineer, Central & Western Canada
 ```
 
-**What didn't work (fully):** the recency-verification and full scoring steps (Steps 2–3 of the prompt) are limited by `web_fetch`'s lack of JS rendering. LinkedIn's "Posted X hours ago" timestamp and full job description text are both delivered client-side, so `web_fetch` can't reliably extract them. In practice this means the pipeline can discover and title/company/location-filter postings, but can't yet do the full keyword-against-description scoring the rubric calls for, or confidently confirm 24-hour recency — the prompt is explicitly written to drop (not guess at) postings where that data isn't available, per the "don't fabricate" instruction in Steps 2–4.
+One of those (the Peregrine posting) was then fetched and scored end-to-end: **60/100** — base 50 + location bonus +10 (Canada), with role-keyword matching left at 0 rather than guessed, because the fetched page text was blocked by LinkedIn's own client-side rendering and security notices before reaching the actual job description body. The agent explicitly declined to fabricate the keyword-match component it couldn't verify, and said so in its delivered output rather than silently assuming a score.
+
+**What didn't work (fully):**
+- The recency-verification and full scoring steps (Steps 2–3 of the prompt) are limited by `web_fetch`'s lack of JS rendering. LinkedIn's "Posted X hours ago" timestamp and full job description text are both delivered client-side, so `web_fetch` can't reliably extract them. In practice this means the pipeline can discover and title/company/location-filter postings, but can't yet do the full keyword-against-description scoring the rubric calls for, or confidently confirm 24-hour recency — the prompt is explicitly written to drop (not guess at) postings where that data isn't available, per the "don't fabricate" instruction in Steps 2–4.
+- Running all four target-role queries in one session reliably hit DuckDuckGo's bot-detection after the first query or two, so multi-role runs in practice only reliably complete one role query per session without hitting a rate limit (see Challenge #8).
 
 ## Limitations / Future Work
 
