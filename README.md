@@ -56,6 +56,19 @@ One of those (the Peregrine posting) was then fetched and scored end-to-end: **6
 - The recency-verification and full scoring steps (Steps 2–3 of the prompt) are limited by `web_fetch`'s lack of JS rendering. LinkedIn's "Posted X hours ago" timestamp and full job description text are both delivered client-side, so `web_fetch` can't reliably extract them. In practice this means the pipeline can discover and title/company/location-filter postings, but can't yet do the full keyword-against-description scoring the rubric calls for, or confidently confirm 24-hour recency — the prompt is explicitly written to drop (not guess at) postings where that data isn't available, per the "don't fabricate" instruction in Steps 2–4.
 - Running all four target-role queries in one session reliably hit DuckDuckGo's bot-detection after the first query or two, so multi-role runs in practice only reliably complete one role query per session without hitting a rate limit (see Challenge #8).
 
+### Evidence
+
+Screenshots from live OpenClaw sessions running this pipeline:
+
+![OpenClaw session showing the scoring walkthrough for the Peregrine posting](https://i.postimg.cc/14WCpmN2/Screenshot-2026-09-06-at-2-20-30-PM.png)
+*Scoring walkthrough: base score, location bonus, and the model explicitly stating it can't calculate the role-keyword component because the description was blocked by LinkedIn's security notices.*
+
+![OpenClaw TUI session showing web_search returning 5 real LinkedIn URLs](https://i.postimg.cc/NLNJ1srP/Screenshot-2026-09-06-at-2-23-03-PM.png)
+*A `web_search` call for `site:linkedin.com/jobs/view Solutions Engineer Canada` returning real LinkedIn job URLs.*
+
+![OpenClaw TUI session showing the agent's tool list and initial attempt to run the job-scout prompt](https://i.postimg.cc/NLGC99L3/Screenshot-2026-09-06-at-2-39-25-PM.png)
+*The agent listing its available tools and flagging that `web_search` wasn't yet reachable, before the Tool Search / allowlist fixes described in Challenges #4–5.*
+
 ## Limitations / Future Work
 
 - **JS-rendered content is the core blocker.** To get real JD-text scoring and recency data, `web_fetch` would need to be replaced or supplemented with a headless-browser fetch tool (e.g. Playwright) capable of executing LinkedIn's client-side rendering — or the agent would need an alternate, ToS-compliant data source for full posting text.
