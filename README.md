@@ -9,9 +9,44 @@ Manually re-searching LinkedIn every day for a handful of target roles (Solution
 ## Solution / Architecture
 
 - **Agent runtime:** [OpenClaw](https://github.com/) — a local agent framework that runs against a locally-hosted model via Ollama (`gemma4:e4b`, 4B params) instead of a cloud LLM.
+- **Trigger:** a cron job at 08:00 America/Toronto (via `openclaw cron`), or a manual run, starts a fresh, isolated agent session that loads `job-scout-prompt.txt`.
 - **Discovery, not scraping:** the agent never authenticates to or crawls LinkedIn. It uses OpenClaw's `web_search` tool with `site:linkedin.com/jobs/view` search-engine queries (via DuckDuckGo) to discover public job posting URLs, and `web_fetch` (a lightweight, non-JS HTTP fetch) to pull whatever page text is available for recency checks.
 - **Sandboxing:** the model and its tools run inside a Docker sandbox (via Colima on macOS), so a small local model with tool access isn't running against the host directly.
 - **Prompt-driven pipeline:** the entire search → filter → score → report flow is defined in a single agent prompt (see [`job-scout-prompt.txt`](./job-scout-prompt.txt)), not custom application code. Four target-role search queries, an 8-URL-per-query cap, a deterministic 0–100 scoring rubric (base score + keyword matches + location bonus − hard-mismatch penalties), and a markdown output table sorted by score, threshold 55+.
+- **Fail-closed delivery:** the scored shortlist is delivered to a configured Telegram channel; if no Telegram channel is configured, the run fails closed rather than silently dropping the output somewhere else.
+
+### Flow
+
+```mermaid
+flowchart TD
+  Start(["Trigger: cron 08:00 America/Toronto, or manual openclaw cron run"]) --> Session["New isolated agent session loads job-scout-prompt.txt"]
+  Session --> Loop{"For each of 4 target-role queries"}
+
+  subgraph SB["Docker sandbox, Colima -- gemma4:e4b via Ollama"]
+    direction TB
+    Loop --> Search["web_search: site:linkedin.com/jobs/view, role, Canada -- provider DuckDuckGo"]
+    Search --> BotCheck{"Bot-detection challenge returned?"}
+    BotCheck -- "yes: log error, skip query" --> NextQ["Move to next query, no fabricated results"]
+    BotCheck -- no --> Collect["Collect result URLs, filter to linkedin.com/jobs/view only"]
+    Collect --> Cap["Cap at 8 URLs per query"]
+    Cap --> Fetch["web_fetch each URL -- lightweight HTTP, no JS rendering"]
+    Fetch --> Rendered{"Full job description text present in fetched page?"}
+    Rendered -- "no: client-side rendered plus security-notice wrapper" --> Partial["Partial data only: title, company, location"]
+    Rendered -- yes --> Full["Full JD text available"]
+  end
+
+  NextQ --> Loop
+  Partial --> Recency{"Posted-X-ago timestamp found and under 24h?"}
+  Full --> Recency
+  Recency -- "no or unclear: drop, do not guess" --> Drop(["Posting discarded"])
+  Recency -- yes --> Score["Score 0-100: base 50, plus role-keyword matches capped at 30 (needs full JD text), plus location bonus 10 or 5, minus 15 per hard-mismatch"]
+  Score --> Threshold{"Score 55 or higher?"}
+  Threshold -- no --> Drop
+  Threshold -- yes --> Table["Append to markdown table, sort by score descending"]
+  Table --> Deliver{"Telegram channel configured?"}
+  Deliver -- no --> FailClosed(["Fail closed -- no delivery"])
+  Deliver -- yes --> Sent(["Scored shortlist delivered to Telegram"])
+```
 
 ## Challenges
 
