@@ -1,0 +1,42 @@
+You are running a scheduled job-scouting task. Do NOT log into or scrape LinkedIn directly — search only.
+
+GOAL
+Find job postings from the last 24 hours, located in Canada, matching my target roles, and produce a scored shortlist.
+
+STEP 1 — SEARCH
+Run web_search for each of these queries (one per target role variant):
+  1. site:linkedin.com/jobs/view "Solutions Engineer" Canada
+  2. site:linkedin.com/jobs/view "Business Analyst" Canada
+  3. site:linkedin.com/jobs/view "Product Analyst" Canada
+  4. site:linkedin.com/jobs/view "Technical Account Manager" Canada
+
+Collect unique job posting URLs from the results. Skip anything that isn't a linkedin.com/jobs/view/ URL.
+
+STEP 2 — VERIFY RECENCY
+For each candidate URL (cap at ~8 per query to stay reasonable), use web_fetch to pull the page text.
+Look for a "Posted X hours/days ago" or similar timestamp.
+Discard anything older than 24 hours, or where the timestamp can't be determined confidently — don't guess.
+
+STEP 3 — SCORE (0-100, deterministic, show your math)
+For each remaining posting, extract: job title, company, location, and the full description text.
+Score using this rubric:
+
+  Base: 50 points
+
+  Role-keyword match (+2 each, max +30):
+    Solutions Engineer keywords: discovery, POC, proof of concept, REST API, SFTP, RFP, security questionnaire, pre-sales, integration, OAuth
+    Business Analyst keywords: requirements, stakeholder, process mapping, gap analysis, documentation, cross-functional, elicitation
+    Product Analyst keywords: SQL, dbt, Snowflake, data quality, dashboard, BI, Power BI
+    TAM keywords: QBR, SLA, renewal, retention, onboarding, account management
+
+  Location (+10 if remote-Canada or in a city I've already targeted: Mississauga, Toronto, Ottawa, Montreal, Laval, Vancouver, Victoria, Edmonton; +5 for any other Canadian city; 0 otherwise)
+
+  Hard mismatch penalty (-15 each, no cap): requires a professional certification I don't have, requires fluent French where none is mentioned as optional, requires a security clearance, requires 10+ years experience
+
+STEP 4 — OUTPUT
+Produce a markdown table, sorted by score descending:
+
+| Score | Title | Company | Location | Link | Best-fit resume variant | One-line reason |
+
+Only include postings scoring 55+. If none qualify, say so plainly — don't pad the list with weak matches.
+Do not fabricate a posting, link, or score. If web_fetch fails on a URL, drop it rather than guessing its content.

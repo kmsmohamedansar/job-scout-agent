@@ -1,0 +1,23 @@
+# OpenClaw / agent runtime config & secrets
+.openclaw/
+*.env
+.env*
+config.yaml
+config.yml
+secrets.json
+*.pem
+*.key
+
+# Session logs / transcripts (may contain personal data)
+sessions/
+*.jsonl
+*.jsonl.zst
+*.zst
+
+# OS / editor cruft
+.DS_Store
+.vscode/
+*.swp
+
+# Docker
+*.log
